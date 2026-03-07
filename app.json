@@ -1,5 +1,6 @@
 {
   "expo": {
+    "scheme": "roommate-app",
     "name": "roommate-app",
     "slug": "roommate-app",
     "version": "1.0.0",
@@ -24,6 +25,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+       "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
