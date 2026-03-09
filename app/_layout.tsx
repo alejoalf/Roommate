@@ -3,6 +3,8 @@ import { Slot, useRouter, useSegments } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { Session } from '@supabase/supabase-js'
 import { View, ActivityIndicator } from 'react-native'
+import { registerForPushNotifications, savePushToken } from '../lib/notifications'
+import * as Notifications from 'expo-notifications'
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null)
@@ -21,6 +23,32 @@ export default function RootLayout() {
     })
 
     return () => subscription.unsubscribe()
+  }, [])
+
+  // Registrar notificaciones push
+  useEffect(() => {
+    registerForPushNotifications().then(token => {
+      if (token) savePushToken(token)
+    })
+
+    // Listener cuando llega una notificación con la app abierta
+    const sub = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notificación recibida:', notification)
+    })
+
+    // Listener cuando el usuario toca una notificación
+    const subResponse = Notifications.addNotificationResponseReceivedListener(response => {
+      const taskId = response.notification.request.content.data?.taskId
+      if (taskId) {
+        // Acá podés navegar a la tarea específica
+        console.log('Tap en notificación, taskId:', taskId)
+      }
+    })
+
+    return () => {
+      sub.remove()
+      subResponse.remove()
+    }
   }, [])
 
   useEffect(() => {

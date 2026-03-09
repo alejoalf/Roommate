@@ -4,6 +4,7 @@ import {
   TextInput, Modal, Alert, ActivityIndicator, RefreshControl, Platform
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
+import { sendLocalNotification, scheduleTaskReminder } from '../../lib/notifications'
 
 const CATEGORIES = ['General', 'Cocina', 'Baño', 'Sala', 'Lavandería', 'Patio', 'Compras']
 const CAT_COLORS: Record<string, string> = {
@@ -38,6 +39,7 @@ export default function TasksScreen() {
   const [newPoints, setNewPoints] = useState('20')
   const [newCategory, setNewCategory] = useState('General')
   const [assignedTo, setAssignedTo] = useState('')
+  const [newDueDate, setNewDueDate] = useState('')
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState<'all' | 'mine' | 'pending' | 'done'>('all')
   const [showPrendas, setShowPrendas] = useState(false)
@@ -71,7 +73,6 @@ export default function TasksScreen() {
         assignee:profiles!tasks_assigned_to_fkey(full_name, username)`)
       .eq('home_id', homeId)
       .order('created_at', { ascending: false })
-    // Mark overdue
     const updated = (data as any || []).map((t: Task) =>
       isOverdue(t) ? { ...t, status: 'overdue' } : t
     )
@@ -89,16 +90,30 @@ export default function TasksScreen() {
     if (!home) return
     setCreating(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('tasks').insert({
+    const { data, error } = await supabase.from('tasks').insert({
       home_id: home.id, title: newTitle.trim(), description: newDesc.trim(),
       points: parseInt(newPoints) || 20, assigned_to: assignedTo || null,
-      created_by: user?.id, status: 'pending', category: newCategory
-    })
-    if (error) Alert.alert('Error', error.message)
-    else {
+      created_by: user?.id, status: 'pending', category: newCategory,
+      due_date: newDueDate || null  // ✅ Ya está
+    }).select('id').single()
+    
+    if (error) {
+      Alert.alert('Error', error.message)
+    } else {
+      // Notificación de tarea creada
+      await sendLocalNotification(
+        '✅ Tarea creada',
+        `"${newTitle.trim()}" fue agregada al hogar`
+      )
+
+      // Programar recordatorio si tiene fecha límite
+      if (newDueDate && data?.id) {
+        await scheduleTaskReminder(newTitle.trim(), new Date(newDueDate), data.id)
+      }
+
       setShowModal(false)
       setNewTitle(''); setNewDesc(''); setNewPoints('20')
-      setNewCategory('General'); setAssignedTo('')
+      setNewCategory('General'); setAssignedTo(''); setNewDueDate('')
       await loadTasks(home.id)
     }
     setCreating(false)
@@ -122,6 +137,13 @@ export default function TasksScreen() {
                 p_user_id: userId, p_home_id: home.id,
                 p_task_id: task.id, p_points: task.points
               })
+              
+              // Notificación de tarea completada
+              await sendLocalNotification(
+                `🎉 +${task.points} puntos`,
+                `Completaste "${task.title}". ¡Bien hecho!`
+              )
+              
               await loadTasks(home.id)
             }
           }
@@ -321,6 +343,15 @@ export default function TasksScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={s.fieldLabel}>FECHA LÍMITE (opcional)</Text>
+            <TextInput
+              style={s.input}
+              placeholder="YYYY-MM-DD  Ej: 2026-03-15"
+              placeholderTextColor="#5a4a40"
+              value={newDueDate}
+              onChangeText={setNewDueDate}
+/>
 
             <Text style={s.fieldLabel}>ASIGNAR A</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}
