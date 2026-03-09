@@ -32,7 +32,7 @@ export default function RootLayout() {
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login')
     } else if (session && !inAppGroup) {
-      router.replace('/(app)/home')
+      router.replace('/(app)/')
     }
   }, [session, loading, segments])
 
