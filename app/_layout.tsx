@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
-import { supabase } from '../lib/supabase'
+import { clearPersistedAuthSession, supabase } from '../lib/supabase'
 import { Session } from '@supabase/supabase-js'
 import { View, ActivityIndicator } from 'react-native'
 import { registerForPushNotifications, savePushToken } from '../lib/notifications'
@@ -12,11 +12,27 @@ export default function RootLayout() {
   const router = useRouter()
   const segments = useSegments()
 
+  const syncAuthState = useCallback(async () => {
+    const { data: { session: rawSession } } = await supabase.auth.getSession()
+    if (!rawSession) {
+      setSession(null)
+      return null
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error || !user) {
+      await supabase.auth.signOut({ scope: 'local' })
+      await clearPersistedAuthSession()
+      setSession(null)
+      return null
+    }
+
+    setSession(rawSession)
+    return rawSession
+  }, [])
+
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        setSession(session)
-      })
+    syncAuthState()
       .catch((error) => {
         console.log('Error obteniendo sesión:', error)
       })
@@ -24,12 +40,24 @@ export default function RootLayout() {
         setLoading(false)
       })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'SIGNED_OUT') {
+        void clearPersistedAuthSession()
+        setSession(null)
+        router.replace('/(auth)/login')
+        return
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        void syncAuthState()
+        return
+      }
+
+      setSession(nextSession)
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [router, syncAuthState])
 
   useEffect(() => {
     if (!session) return
@@ -67,10 +95,10 @@ export default function RootLayout() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login')
-    } else if (session && !inAppGroup) {
+    } else if (session && !inAppGroup && !inAuthGroup) {
       router.replace('/(app)/')
     }
-  }, [session, loading, segments])
+  }, [session, loading, segments, router])
 
   if (loading) {
     return (

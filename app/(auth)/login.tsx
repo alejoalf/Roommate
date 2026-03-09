@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, KeyboardAvoidingView, Platform, ScrollView
+  Alert, KeyboardAvoidingView, Platform, ScrollView, Linking
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
+
+const APK_DOWNLOAD_URL = process.env.EXPO_PUBLIC_APK_URL?.trim() || ''
 
 export default function Login() {
   const router = useRouter()
@@ -53,6 +55,19 @@ export default function Login() {
       }
     }
     setRegLoading(false)
+  }
+
+  async function handleApkDownload() {
+    if (!APK_DOWNLOAD_URL) {
+      Alert.alert('Falta configurar el enlace del APK')
+      return
+    }
+    const canOpen = await Linking.canOpenURL(APK_DOWNLOAD_URL)
+    if (!canOpen) {
+      Alert.alert('No se pudo abrir el enlace del APK')
+      return
+    }
+    await Linking.openURL(APK_DOWNLOAD_URL)
   }
 
   return (
@@ -129,6 +144,20 @@ export default function Login() {
                   {loginLoading ? 'Entrando...' : 'Iniciar Sesión'}
                 </Text>
               </TouchableOpacity>
+
+              <View style={s.apkBox}>
+                <Text style={s.apkTitle}>Preferis instalar la app Android?</Text>
+                <Text style={s.apkHint}>Descarga directa del APK</Text>
+                <TouchableOpacity
+                  style={[s.apkBtn, !APK_DOWNLOAD_URL && s.apkBtnDisabled]}
+                  onPress={handleApkDownload}
+                  disabled={!APK_DOWNLOAD_URL}
+                >
+                  <Text style={s.apkBtnText}>
+                    {APK_DOWNLOAD_URL ? 'Descargar APK' : 'APK no disponible'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -251,6 +280,27 @@ const s = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.5 },
   btnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  apkBox: {
+    marginTop: 12,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(212,165,116,0.2)',
+    backgroundColor: '#201a14'
+  },
+  apkTitle: { color: '#f5ede4', fontSize: 13, fontWeight: '700' },
+  apkHint: { color: '#b89a84', fontSize: 12, marginTop: 4, marginBottom: 10 },
+  apkBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#2d241b',
+    borderWidth: 1,
+    borderColor: 'rgba(212,165,116,0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  apkBtnDisabled: { opacity: 0.5 },
+  apkBtnText: { color: '#f5ede4', fontSize: 12, fontWeight: '700' },
   footer: {
     textAlign: 'center', fontSize: 11,
     color: '#5a4a40', marginTop: 20

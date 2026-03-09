@@ -3,9 +3,11 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, Platform
 } from 'react-native'
-import { supabase } from '../../lib/supabase'
+import { useRouter } from 'expo-router'
+import { clearPersistedAuthSession, supabase } from '../../lib/supabase'
 
 export default function Home() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [hasHome, setHasHome] = useState(false)
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu')
@@ -59,6 +61,23 @@ export default function Home() {
     setSubmitting(false)
   }
 
+  async function handleSignOut() {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      await supabase.auth.signOut({ scope: 'local' })
+    }
+
+    await clearPersistedAuthSession()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      Alert.alert('No se pudo cerrar sesión por completo. Intentá de nuevo.')
+      return
+    }
+
+    router.replace('/(auth)/login')
+  }
+
   if (loading) return (
     <View style={s.center}><ActivityIndicator color="#e67e50" size="large" /></View>
   )
@@ -97,7 +116,7 @@ export default function Home() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={s.logoutLink} onPress={() => supabase.auth.signOut()}>
+      <TouchableOpacity style={s.logoutLink} onPress={handleSignOut}>
         <Text style={s.logoutText}>Cerrar sesión</Text>
       </TouchableOpacity>
     </View>

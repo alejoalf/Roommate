@@ -3,7 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl, Alert, Platform
 } from 'react-native'
-import { supabase } from '../../lib/supabase'
+import { useRouter } from 'expo-router'
+import { clearPersistedAuthSession, supabase } from '../../lib/supabase'
 
 type Profile = { id: string; full_name: string; username: string; total_points: number }
 type Log = { id: string; points: number; reason: string; created_at: string }
@@ -34,6 +35,7 @@ function getBadges(totalPts: number, tasksDone: number, rewardsClaimed: number) 
 }
 
 export default function ProfileScreen() {
+  const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [homePoints, setHomePoints] = useState(0)
   const [homeName, setHomeName] = useState('')
@@ -98,6 +100,38 @@ export default function ProfileScreen() {
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('es-AR', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
   })
+
+  async function handleSignOut() {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      await supabase.auth.signOut({ scope: 'local' })
+    }
+
+    await clearPersistedAuthSession()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      Alert.alert('No se pudo cerrar sesión por completo. Intentá de nuevo.')
+      return
+    }
+
+    router.replace('/(auth)/login')
+  }
+
+  function handleLogoutPress() {
+    if (Platform.OS === 'web') {
+      const confirmed = globalThis.confirm('¿Estás seguro que querés cerrar sesión?')
+      if (confirmed) {
+        void handleSignOut()
+      }
+      return
+    }
+
+    Alert.alert('Cerrar sesión', '¿Estás seguro?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Salir', style: 'destructive', onPress: () => { void handleSignOut() } }
+    ])
+  }
 
   if (loading) return (
     <View style={s.center}><ActivityIndicator color="#e67e50" size="large" /></View>
@@ -247,10 +281,7 @@ export default function ProfileScreen() {
         {/* LOGOUT */}
         <TouchableOpacity
           style={s.logoutBtn}
-          onPress={() => Alert.alert('Cerrar sesión', '¿Estás seguro?', [
-            { text: 'Cancelar', style: 'cancel' },
-            { text: 'Salir', style: 'destructive', onPress: () => supabase.auth.signOut() }
-          ])}
+          onPress={handleLogoutPress}
         >
           <Text style={s.logoutText}>Cerrar sesión</Text>
         </TouchableOpacity>
