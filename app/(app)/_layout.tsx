@@ -1,7 +1,51 @@
-import { Tabs } from 'expo-router'
-import { Text } from 'react-native'
+import { Tabs, Slot } from 'expo-router'
+import { Text, View, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native'
+import { useRouter, usePathname } from 'expo-router'
 
-export default function AppLayout() {
+function DesktopSidebar() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const tabs = [
+    { name: 'index', path: '/(app)/', label: 'Tareas', icon: '✅' },
+    { name: 'ranking', path: '/(app)/ranking', label: 'Ranking', icon: '🏆' },
+    { name: 'rewards', path: '/(app)/rewards', label: 'Premios', icon: '🎁' },
+    { name: 'profile', path: '/(app)/profile', label: 'Perfil', icon: '👤' },
+  ]
+
+  return (
+    <View style={styles.desktopContainer}>
+      {/* Sidebar */}
+      <View style={styles.sidebar}>
+        <Text style={styles.logo}>🏠 RoomMate</Text>
+        
+        {tabs.map(tab => {
+          const isActive = pathname === tab.path || 
+            (tab.name === 'index' && pathname === '/(app)')
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              style={[styles.sidebarItem, isActive && styles.sidebarItemActive]}
+              onPress={() => router.push(tab.path as any)}
+            >
+              <Text style={styles.sidebarIcon}>{tab.icon}</Text>
+              <Text style={[styles.sidebarLabel, isActive && styles.sidebarLabelActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+
+      {/* Contenido principal */}
+      <View style={styles.mainContent}>
+        <Slot />
+      </View>
+    </View>
+  )
+}
+
+function MobileTabs() {
   return (
     <Tabs
       screenOptions={{
@@ -50,3 +94,64 @@ export default function AppLayout() {
     </Tabs>
   )
 }
+
+export default function AppLayout() {
+  const { width } = useWindowDimensions()
+  const isDesktop = width >= 900
+
+  if (isDesktop) {
+    return <DesktopSidebar />
+  }
+
+  return <MobileTabs />
+}
+
+const styles = StyleSheet.create({
+  desktopContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#0a0a0f',
+  },
+  sidebar: {
+    width: 240,
+    backgroundColor: '#111118',
+    borderRightWidth: 1,
+    borderRightColor: '#1a1a24',
+    paddingTop: 32,
+    paddingHorizontal: 16,
+  },
+  logo: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#f0f0f5',
+    marginBottom: 40,
+    paddingHorizontal: 12,
+  },
+  sidebarItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  sidebarItemActive: {
+    backgroundColor: 'rgba(230, 126, 80, 0.15)',
+  },
+  sidebarIcon: {
+    fontSize: 20,
+    marginRight: 14,
+  },
+  sidebarLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#5a4a40',
+  },
+  sidebarLabelActive: {
+    color: '#e67e50',
+  },
+  mainContent: {
+    flex: 1,
+    backgroundColor: '#0f0f14',
+  },
+})
