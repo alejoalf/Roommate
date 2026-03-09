@@ -34,7 +34,7 @@ export default function RewardsScreen() {
     if (!user) return
     setUserId(user.id)
     const { data: mem } = await supabase
-      .from('home_members').select('home_id, points').eq('user_id', user.id).single()
+      .from('home_members').select('home_id, points').eq('user_id', user.id).maybeSingle()
     if (!mem) { setLoading(false); return }
     setHomeId(mem.home_id)
     setMyPoints(mem.points || 0)

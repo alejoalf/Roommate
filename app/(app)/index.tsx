@@ -57,7 +57,7 @@ export default function TasksScreen() {
     const { data: membership } = await supabase
       .from('home_members')
       .select('home_id, homes(id, name, invite_code)')
-      .eq('user_id', user.id).single()
+      .eq('user_id', user.id).maybeSingle()
     if (!membership) { setLoading(false); return }
     const homeData = membership.homes as any
     setHome(homeData)

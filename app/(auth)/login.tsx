@@ -4,7 +4,7 @@ import {
   Alert, KeyboardAvoidingView, Platform, ScrollView, Linking
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '../../lib/supabase'
+import { clearPersistedAuthSession, supabase } from '../../lib/supabase'
 
 const APK_DOWNLOAD_URL = process.env.EXPO_PUBLIC_APK_URL?.trim() || ''
 
@@ -30,8 +30,14 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({
       email: loginEmail, password: loginPassword
     })
-    if (error) Alert.alert('Error', error.message)
     setLoginLoading(false)
+    
+    if (error) {
+      Alert.alert('Error', error.message)
+      return
+    }
+    
+    // El _layout va a redirigir automáticamente cuando detecte la sesión
   }
 
   async function handleRegister() {
@@ -39,21 +45,65 @@ export default function Login() {
       return Alert.alert('Completá todos los campos')
     if (regPassword.length < 6)
       return Alert.alert('La contraseña debe tener al menos 6 caracteres')
+    
     setRegLoading(true)
-    const { error } = await supabase.auth.signUp({
-      email: regEmail, password: regPassword,
-      options: { data: { full_name: regName, username: regUsername.toLowerCase() } }
-    })
-    if (error) {
-      Alert.alert('Error', error.message)
-    } else {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('profiles')
-          .update({ username: regUsername.toLowerCase(), full_name: regName })
-          .eq('id', user.id)
+    
+    // Limpiar cualquier sesión anterior antes de registrar
+    await supabase.auth.signOut({ scope: 'local' })
+    await clearPersistedAuthSession()
+    
+    const { data, error } = await supabase.auth.signUp({
+      email: regEmail, 
+      password: regPassword,
+      options: { 
+        data: { 
+          full_name: regName, 
+          username: regUsername.toLowerCase() 
+        } 
       }
+    })
+    
+    if (error) {
+      if (error.message.includes('already registered') || error.message.includes('User already registered')) {
+        Alert.alert(
+          'Email ya registrado', 
+          'Este email ya está en uso. Si sos vos, usá "Iniciar Sesión". Si olvidaste tu contraseña, contactá soporte.',
+          [{ text: 'OK', onPress: () => setTab('login') }]
+        )
+      } else {
+        Alert.alert('Error', error.message)
+      }
+      setRegLoading(false)
+      return
     }
+
+    if (!data.user) {
+      Alert.alert('Error', 'No se pudo crear la cuenta')
+      setRegLoading(false)
+      return
+    }
+
+    // Esperar a que la sesión esté disponible
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    // Actualizar perfil
+    const { error: profileError } = await supabase.from('profiles')
+      .update({ 
+        username: regUsername.toLowerCase(), 
+        full_name: regName 
+      })
+      .eq('id', data.user.id)
+
+    if (profileError) {
+      console.log('Error actualizando perfil:', profileError)
+    }
+
+    Alert.alert(
+      '✅ Cuenta creada', 
+      'Tu cuenta fue creada exitosamente. Ya podés iniciar sesión.',
+      [{ text: 'OK', onPress: () => setTab('login') }]
+    )
+    
     setRegLoading(false)
   }
 

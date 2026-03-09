@@ -56,12 +56,12 @@ export default function ProfileScreen() {
 
     const { data: prof } = await supabase
       .from('profiles').select('id, full_name, username, total_points')
-      .eq('id', user.id).single()
+      .eq('id', user.id).maybeSingle()
     if (prof) setProfile(prof as Profile)
 
     const { data: mem } = await supabase
       .from('home_members').select('points, home_id, homes(name)')
-      .eq('user_id', user.id).single()
+      .eq('user_id', user.id).maybeSingle()
     if (mem) {
       setHomePoints(mem.points || 0)
       setHomeName((mem.homes as any)?.name || '')
@@ -102,20 +102,8 @@ export default function ProfileScreen() {
   })
 
   async function handleSignOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      await supabase.auth.signOut({ scope: 'local' })
-    }
-
-    await clearPersistedAuthSession()
-
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
-      Alert.alert('No se pudo cerrar sesión por completo. Intentá de nuevo.')
-      return
-    }
-
-    router.replace('/(auth)/login')
+    // Usar signOut simple - el evento SIGNED_OUT en _layout va a redirigir
+    await supabase.auth.signOut()
   }
 
   function handleLogoutPress() {

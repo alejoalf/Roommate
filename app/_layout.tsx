@@ -42,13 +42,23 @@ export default function RootLayout() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (event === 'SIGNED_OUT') {
-        void clearPersistedAuthSession()
         setSession(null)
         router.replace('/(auth)/login')
+        // Limpiar storage después de un delay para evitar race conditions con signOut
+        setTimeout(() => {
+          void clearPersistedAuthSession()
+        }, 100)
         return
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN') {
+        // Para login, confiar en la sesión sin validación agresiva
+        setSession(nextSession)
+        return
+      }
+
+      if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        // Solo validar en refresh o sesión inicial
         void syncAuthState()
         return
       }
@@ -95,6 +105,8 @@ export default function RootLayout() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login')
+    } else if (session && inAuthGroup) {
+      router.replace('/(app)/')
     } else if (session && !inAppGroup && !inAuthGroup) {
       router.replace('/(app)/')
     }

@@ -48,7 +48,7 @@ export default function RankingScreen() {
     const { data: membership } = await supabase
       .from('home_members')
       .select('home_id, homes(name)')
-      .eq('user_id', user.id).single()
+      .eq('user_id', user.id).maybeSingle()
     if (!membership) { setLoading(false); return }
     setHomeName((membership.homes as any)?.name || '')
     const { data } = await supabase

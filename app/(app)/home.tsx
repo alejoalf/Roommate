@@ -52,7 +52,7 @@ export default function Home() {
       .from('homes').select().eq('invite_code', inviteCode.trim().toUpperCase()).single()
     if (error || !home) { Alert.alert('Código inválido'); setSubmitting(false); return }
     const { data: existing } = await supabase
-      .from('home_members').select().eq('home_id', home.id).eq('user_id', user.id).single()
+      .from('home_members').select().eq('home_id', home.id).eq('user_id', user.id).maybeSingle()
     if (existing) { Alert.alert('Ya sos miembro de este hogar'); setSubmitting(false); return }
     const { error: joinError } = await supabase
       .from('home_members').insert({ home_id: home.id, user_id: user.id, role: 'member' })
@@ -62,20 +62,8 @@ export default function Home() {
   }
 
   async function handleSignOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      await supabase.auth.signOut({ scope: 'local' })
-    }
-
-    await clearPersistedAuthSession()
-
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
-      Alert.alert('No se pudo cerrar sesión por completo. Intentá de nuevo.')
-      return
-    }
-
-    router.replace('/(auth)/login')
+    // Usar signOut simple - el evento SIGNED_OUT en _layout va a redirigir
+    await supabase.auth.signOut()
   }
 
   if (loading) return (
