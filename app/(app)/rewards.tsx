@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator, RefreshControl, Platform
+  TextInput, Modal, Alert, RefreshControl, Platform, ActivityIndicator
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
+import { SkeletonScreen, FadeInView, ScaleInView } from '../../components/Animated'
 
 type Reward = {
   id: string; title: string; description: string
@@ -102,9 +103,7 @@ export default function RewardsScreen() {
     ])
   }
 
-  if (loading) return (
-    <View style={s.center}><ActivityIndicator color="#e67e50" size="large" /></View>
-  )
+  if (loading) return <SkeletonScreen />
 
   return (
     <View style={s.container}>

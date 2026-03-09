@@ -1,9 +1,10 @@
 {
   "expo": {
-    "scheme": "roommate-app",
     "name": "roommate-app",
     "slug": "roommate-app",
     "version": "1.0.0",
+    "newArchEnabled": false,
+    "scheme": "roommate-app",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,7 +26,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-       "bundler": "metro",
+      "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [

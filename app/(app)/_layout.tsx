@@ -1,6 +1,26 @@
 import { Tabs, Slot } from 'expo-router'
-import { Text, View, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native'
+import { Animated, Text, View, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native'
 import { useRouter, usePathname } from 'expo-router'
+import { useRef, useEffect } from 'react'
+
+function AnimatedTabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
+  const scale = useRef(new Animated.Value(1)).current
+
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: focused ? 1.25 : 1,
+      useNativeDriver: true,
+      damping: 10,
+      stiffness: 180
+    }).start()
+  }, [focused])
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Text style={{ fontSize: 20 }}>{emoji}</Text>
+    </Animated.View>
+  )
+}
 
 function DesktopSidebar() {
   const router = useRouter()
@@ -15,7 +35,6 @@ function DesktopSidebar() {
 
   return (
     <View style={styles.desktopContainer}>
-      {/* Sidebar */}
       <View style={styles.sidebar}>
         <Text style={styles.logo}>🏠 RoomMate</Text>
         
@@ -37,7 +56,6 @@ function DesktopSidebar() {
         })}
       </View>
 
-      {/* Contenido principal */}
       <View style={styles.mainContent}>
         <Slot />
       </View>
@@ -67,28 +85,28 @@ function MobileTabs() {
         name="index"
         options={{
           title: 'Tareas',
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>✅</Text>
+          tabBarIcon: ({ focused }) => <AnimatedTabIcon emoji="✅" focused={focused} />
         }}
       />
       <Tabs.Screen
         name="ranking"
         options={{
           title: 'Ranking',
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🏆</Text>
+          tabBarIcon: ({ focused }) => <AnimatedTabIcon emoji="🏆" focused={focused} />
         }}
       />
       <Tabs.Screen
         name="rewards"
         options={{
           title: 'Premios',
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🎁</Text>
+          tabBarIcon: ({ focused }) => <AnimatedTabIcon emoji="🎁" focused={focused} />
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>👤</Text>
+          tabBarIcon: ({ focused }) => <AnimatedTabIcon emoji="👤" focused={focused} />
         }}
       />
     </Tabs>

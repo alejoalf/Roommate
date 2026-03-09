@@ -13,10 +13,16 @@ export default function RootLayout() {
   const segments = useSegments()
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session)
+      })
+      .catch((error) => {
+        console.log('Error obteniendo sesión:', error)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
@@ -25,22 +31,24 @@ export default function RootLayout() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Registrar notificaciones push
   useEffect(() => {
-    registerForPushNotifications().then(token => {
-      if (token) savePushToken(token)
-    })
+    if (!session) return
 
-    // Listener cuando llega una notificación con la app abierta
+    registerForPushNotifications()
+      .then(token => {
+        if (token) savePushToken(token)
+      })
+      .catch(error => {
+        console.log('Error registrando notificaciones:', error)
+      })
+
     const sub = Notifications.addNotificationReceivedListener(notification => {
       console.log('Notificación recibida:', notification)
     })
 
-    // Listener cuando el usuario toca una notificación
     const subResponse = Notifications.addNotificationResponseReceivedListener(response => {
       const taskId = response.notification.request.content.data?.taskId
       if (taskId) {
-        // Acá podés navegar a la tarea específica
         console.log('Tap en notificación, taskId:', taskId)
       }
     })
@@ -49,7 +57,7 @@ export default function RootLayout() {
       sub.remove()
       subResponse.remove()
     }
-  }, [])
+  }, [session])
 
   useEffect(() => {
     if (loading) return

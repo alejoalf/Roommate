@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator, RefreshControl, Platform
+  TextInput, Modal, Alert, RefreshControl, Platform
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
 import { sendLocalNotification, scheduleTaskReminder } from '../../lib/notifications'
+import { FadeInView, FloatingPoints, SkeletonScreen } from '../../components/Animated'
 
 const CATEGORIES = ['General', 'Cocina', 'Baño', 'Sala', 'Lavandería', 'Patio', 'Compras']
 const CAT_COLORS: Record<string, string> = {
@@ -43,6 +44,9 @@ export default function TasksScreen() {
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState<'all' | 'mine' | 'pending' | 'done'>('all')
   const [showPrendas, setShowPrendas] = useState(false)
+  // Estados para animación de puntos
+  const [floatPoints, setFloatPoints] = useState(0)
+  const [showFloat, setShowFloat] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -94,7 +98,7 @@ export default function TasksScreen() {
       home_id: home.id, title: newTitle.trim(), description: newDesc.trim(),
       points: parseInt(newPoints) || 20, assigned_to: assignedTo || null,
       created_by: user?.id, status: 'pending', category: newCategory,
-      due_date: newDueDate || null  // ✅ Ya está
+      due_date: newDueDate || null  // 
     }).select('id').single()
     
     if (error) {
@@ -138,12 +142,14 @@ export default function TasksScreen() {
                 p_task_id: task.id, p_points: task.points
               })
               
-              // Notificación de tarea completada
               await sendLocalNotification(
                 `🎉 +${task.points} puntos`,
                 `Completaste "${task.title}". ¡Bien hecho!`
               )
               
+              // Mostrar animación de puntos
+              setFloatPoints(task.points)
+              setShowFloat(true)
               await loadTasks(home.id)
             }
           }
@@ -168,9 +174,7 @@ export default function TasksScreen() {
     return '#d4a574'
   }
 
-  if (loading) return (
-    <View style={s.center}><ActivityIndicator color="#e67e50" size="large" /></View>
-  )
+  if (loading) return <SkeletonScreen />
 
   if (!home) return (
     <View style={s.center}>
@@ -236,72 +240,80 @@ export default function TasksScreen() {
           </View>
         )}
 
-        {filteredTasks.map(task => {
+        {filteredTasks.map((task, index) => {
           const done = task.status === 'completed' || task.status === 'verified'
           const overdue = task.status === 'overdue'
           const catColor = CAT_COLORS[task.category] || '#8a7060'
 
           return (
-            <TouchableOpacity
-              key={task.id}
-              style={[
-                s.taskCard,
-                done && s.taskCardDone,
-                overdue && s.taskCardOverdue
-              ]}
-              onPress={() => completeTask(task)}
-              activeOpacity={0.75}
-            >
-              <View style={s.taskTop}>
-                {/* Status dot */}
-                <View style={[s.statusDot, { backgroundColor: statusColor(task.status) }]} />
+            <FadeInView key={task.id} delay={index * 60}>
+              <TouchableOpacity
+                style={[
+                  s.taskCard,
+                  done && s.taskCardDone,
+                  overdue && s.taskCardOverdue
+                ]}
+                onPress={() => completeTask(task)}
+                activeOpacity={0.75}
+              >
+                <View style={s.taskTop}>
+                  {/* Status dot */}
+                  <View style={[s.statusDot, { backgroundColor: statusColor(task.status) }]} />
 
-                <View style={{ flex: 1 }}>
-                  <View style={s.taskTitleRow}>
-                    <Text style={[s.taskTitle, done && s.taskTitleDone]} numberOfLines={1}>
-                      {task.title}
-                    </Text>
-                    <View style={s.taskPts}>
-                      <Text style={[s.taskPtsVal, { color: done ? '#7ecb6e' : '#d4a574' }]}>+{task.points}</Text>
-                      <Text style={s.taskPtsLabel}>pts</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={s.taskTitleRow}>
+                      <Text style={[s.taskTitle, done && s.taskTitleDone]} numberOfLines={1}>
+                        {task.title}
+                      </Text>
+                      <View style={s.taskPts}>
+                        <Text style={[s.taskPtsVal, { color: done ? '#7ecb6e' : '#d4a574' }]}>+{task.points}</Text>
+                        <Text style={s.taskPtsLabel}>pts</Text>
+                      </View>
+                    </View>
+
+                    <View style={s.taskMeta}>
+                      <View style={[s.catTag, { backgroundColor: catColor + '18', borderColor: catColor + '40' }]}>
+                        <Text style={[s.catText, { color: catColor }]}>{task.category}</Text>
+                      </View>
+                      {task.assignee && (
+                        <Text style={s.assigneeText}>
+                          👤 {task.assignee.full_name || task.assignee.username}
+                        </Text>
+                      )}
+                      {task.due_date && (
+                        <Text style={[s.dateText, overdue && { color: '#c64747' }]}>
+                          📅 {new Date(task.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                        </Text>
+                      )}
                     </View>
                   </View>
+                </View>
 
-                  <View style={s.taskMeta}>
-                    <View style={[s.catTag, { backgroundColor: catColor + '18', borderColor: catColor + '40' }]}>
-                      <Text style={[s.catText, { color: catColor }]}>{task.category}</Text>
-                    </View>
-                    {task.assignee && (
-                      <Text style={s.assigneeText}>
-                        👤 {task.assignee.full_name || task.assignee.username}
-                      </Text>
-                    )}
-                    {task.due_date && (
-                      <Text style={[s.dateText, overdue && { color: '#c64747' }]}>
-                        📅 {new Date(task.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
-                      </Text>
-                    )}
+                {/* Action button for pending */}
+                {task.status === 'pending' && (
+                  <TouchableOpacity style={s.completeBtn} onPress={() => completeTask(task)}>
+                    <Text style={s.completeBtnText}>Marcar como completada</Text>
+                  </TouchableOpacity>
+                )}
+                {overdue && (
+                  <View style={s.overdueTag}>
+                    <Text style={s.overdueText}>⚠️ Vencida — se generó una prenda</Text>
                   </View>
-                </View>
-              </View>
-
-              {/* Action button for pending */}
-              {task.status === 'pending' && (
-                <TouchableOpacity style={s.completeBtn} onPress={() => completeTask(task)}>
-                  <Text style={s.completeBtnText}>Marcar como completada</Text>
-                </TouchableOpacity>
-              )}
-              {overdue && (
-                <View style={s.overdueTag}>
-                  <Text style={s.overdueText}>⚠️ Vencida — se generó una prenda</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            </FadeInView>
           )
         })}
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* FloatingPoints - antes del FAB */}
+      <FloatingPoints
+        points={floatPoints}
+        visible={showFloat}
+        onDone={() => setShowFloat(false)}
+      />
 
       {/* FAB */}
       <TouchableOpacity style={s.fab} onPress={() => setShowModal(true)}>

@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, RefreshControl, Platform
+  RefreshControl, Platform
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
+import { SkeletonScreen, FadeInView, ScaleInView } from '../../components/Animated'
 
 type Member = {
   user_id: string; points: number
@@ -68,9 +69,7 @@ export default function RankingScreen() {
     setRefreshing(false)
   }, [])
 
-  if (loading) return (
-    <View style={s.center}><ActivityIndicator color="#e67e50" size="large" /></View>
-  )
+  if (loading) return <SkeletonScreen />
 
   const top = members[0]
   const myRank = members.findIndex(m => m.user_id === userId)
@@ -94,36 +93,38 @@ export default function RankingScreen() {
 
         {/* ROOMMATE DEL MES — hero card */}
         {top && (
-          <View style={s.heroCard}>
-            <View style={s.heroGrad}>
-              <View style={s.heroTop}>
-                <View style={s.heroIcon}>
-                  <Text style={{ fontSize: 22 }}>🏆</Text>
-                </View>
-                <Text style={s.heroLabel}>Roommate del Mes</Text>
-              </View>
-              <View style={s.heroBody}>
-                <View style={[s.heroAvatar, { backgroundColor: AVATAR_COLORS[0] }]}>
-                  <Text style={s.heroAvatarText}>
-                    {(top.profile?.full_name || top.profile?.username || '?')[0].toUpperCase()}
-                  </Text>
-                </View>
-                <View>
-                  <Text style={s.heroName}>
-                    {top.profile?.full_name || top.profile?.username}
-                    {top.user_id === userId ? '  (vos 🎉)' : ''}
-                  </Text>
-                  <View style={s.heroPointsRow}>
-                    <Text style={s.heroPointsStar}>★</Text>
-                    <Text style={s.heroPoints}>{top.points} puntos</Text>
+          <ScaleInView delay={100}>
+            <View style={s.heroCard}>
+              <View style={s.heroGrad}>
+                <View style={s.heroTop}>
+                  <View style={s.heroIcon}>
+                    <Text style={{ fontSize: 22 }}>🏆</Text>
                   </View>
-                  <Text style={s.heroLevel}>
-                    {getLevel(top.points).emoji} {getLevel(top.points).name}
-                  </Text>
+                  <Text style={s.heroLabel}>Roommate del Mes</Text>
+                </View>
+                <View style={s.heroBody}>
+                  <View style={[s.heroAvatar, { backgroundColor: AVATAR_COLORS[0] }]}>
+                    <Text style={s.heroAvatarText}>
+                      {(top.profile?.full_name || top.profile?.username || '?')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={s.heroName}>
+                      {top.profile?.full_name || top.profile?.username}
+                      {top.user_id === userId ? '  (vos 🎉)' : ''}
+                    </Text>
+                    <View style={s.heroPointsRow}>
+                      <Text style={s.heroPointsStar}>★</Text>
+                      <Text style={s.heroPoints}>{top.points} puntos</Text>
+                    </View>
+                    <Text style={s.heroLevel}>
+                      {getLevel(top.points).emoji} {getLevel(top.points).name}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
+          </ScaleInView>
         )}
 
         {/* MI POSICIÓN */}
@@ -153,35 +154,36 @@ export default function RankingScreen() {
 
           {members.map((m, i) => {
             const isMe = m.user_id === userId
-            const lvl = getLevel(m.points)
-            const avatarColor = AVATAR_COLORS[i % AVATAR_COLORS.length]
-
+            const lvl = getLevel(m.profile?.total_points || m.points || 0)
+            
             return (
-              <View key={m.user_id} style={[s.row, isMe && s.rowMe]}>
-                <Text style={s.rowMedal}>{getMedal(i)}</Text>
+              <FadeInView key={m.user_id} delay={i * 80}>
+                <View style={s.row}>
+                  <Text style={s.rowMedal}>{getMedal(i)}</Text>
 
-                <View style={[s.rowAvatar, { backgroundColor: avatarColor }]}>
-                  <Text style={s.rowAvatarText}>
-                    {(m.profile?.full_name || m.profile?.username || '?')[0].toUpperCase()}
-                  </Text>
-                </View>
+                  <View style={[s.rowAvatar, { backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }]}>
+                    <Text style={s.rowAvatarText}>
+                      {(m.profile?.full_name || m.profile?.username || '?')[0].toUpperCase()}
+                    </Text>
+                  </View>
 
-                <View style={s.rowInfo}>
-                  <Text style={[s.rowName, isMe && s.rowNameMe]} numberOfLines={1}>
-                    {m.profile?.full_name || m.profile?.username || 'Sin nombre'}
-                    {isMe ? ' (vos)' : ''}
-                  </Text>
-                  <Text style={s.rowLevel}>{lvl.emoji} {lvl.name}</Text>
-                </View>
+                  <View style={s.rowInfo}>
+                    <Text style={[s.rowName, isMe && s.rowNameMe]} numberOfLines={1}>
+                      {m.profile?.full_name || m.profile?.username || 'Sin nombre'}
+                      {isMe ? ' (vos)' : ''}
+                    </Text>
+                    <Text style={s.rowLevel}>{lvl.emoji} {lvl.name}</Text>
+                  </View>
 
-                <View style={s.rowRight}>
-                  <Text style={[s.rowPts, isMe && s.rowPtsMe]}>{m.points}</Text>
-                  <Text style={s.rowPtsLbl}>pts</Text>
+                  <View style={s.rowRight}>
+                    <Text style={[s.rowPts, isMe && s.rowPtsMe]}>{m.points}</Text>
+                    <Text style={s.rowPtsLbl}>pts</Text>
+                  </View>
                 </View>
-              </View>
+              </FadeInView>
             )
           })}
-        </View>
+        </View>  {/* <- Cerrar el View de listSection */}
 
         {/* NIVELES */}
         <View style={s.levelsSection}>
