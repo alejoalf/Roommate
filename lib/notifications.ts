@@ -4,19 +4,31 @@ import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { supabase } from './supabase'
 
+const isWeb = Platform.OS === 'web'
+const canScheduleNotifications =
+  typeof Notifications.scheduleNotificationAsync === 'function'
+const canCancelNotifications =
+  typeof Notifications.cancelAllScheduledNotificationsAsync === 'function'
+
 // Cómo se muestran las notificaciones cuando la app está abierta
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-})
+if (!isWeb) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  })
+}
 
 // Pedir permisos y obtener el token del dispositivo
 export async function registerForPushNotifications(): Promise<string | null> {
+  if (isWeb) {
+    return null
+  }
+
   if (!Device.isDevice) {
     console.log('Las notificaciones solo funcionan en dispositivo físico')
     return null
@@ -66,10 +78,16 @@ export async function savePushToken(token: string) {
 
 // Notificación local inmediata
 export async function sendLocalNotification(title: string, body: string) {
-  await Notifications.scheduleNotificationAsync({
-    content: { title, body, sound: true },
-    trigger: null
-  })
+  if (isWeb || !canScheduleNotifications) return
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: true },
+      trigger: null
+    })
+  } catch (error) {
+    console.log('No se pudo enviar notificación local:', error)
+  }
 }
 
 // Programar recordatorio para una tarea
@@ -78,24 +96,36 @@ export async function scheduleTaskReminder(
   dueDate: Date,
   taskId: string
 ) {
+  if (isWeb || !canScheduleNotifications) return
+
   const reminderDate = new Date(dueDate.getTime() - 2 * 60 * 60 * 1000)
   if (reminderDate < new Date()) return
 
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: '⏰ Tarea por vencer',
-      body: `"${taskTitle}" vence en 2 horas. ¡No olvides completarla!`,
-      data: { taskId },
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: reminderDate,
-    }
-  })
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '⏰ Tarea por vencer',
+        body: `"${taskTitle}" vence en 2 horas. ¡No olvides completarla!`,
+        data: { taskId },
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: reminderDate,
+      }
+    })
+  } catch (error) {
+    console.log('No se pudo programar recordatorio:', error)
+  }
 }
 
 // Cancelar todos los recordatorios
 export async function cancelAllReminders() {
-  await Notifications.cancelAllScheduledNotificationsAsync()
+  if (isWeb || !canCancelNotifications) return
+
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync()
+  } catch (error) {
+    console.log('No se pudieron cancelar recordatorios:', error)
+  }
 }

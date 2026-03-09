@@ -50,14 +50,30 @@ export default function TasksScreen() {
 
   useEffect(() => { loadData() }, [])
 
+  async function getMembershipWithRetry(userId: string) {
+    const attempts = 4
+    for (let i = 0; i < attempts; i++) {
+      const { data: membership } = await supabase
+        .from('home_members')
+        .select('home_id, homes(id, name, invite_code)')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (membership) return membership
+
+      if (i < attempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 250))
+      }
+    }
+
+    return null
+  }
+
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
-    const { data: membership } = await supabase
-      .from('home_members')
-      .select('home_id, homes(id, name, invite_code)')
-      .eq('user_id', user.id).maybeSingle()
+    const membership = await getMembershipWithRetry(user.id)
     if (!membership) { setLoading(false); return }
     const homeData = membership.homes as any
     setHome(homeData)
@@ -105,14 +121,22 @@ export default function TasksScreen() {
       Alert.alert('Error', error.message)
     } else {
       // Notificación de tarea creada
-      await sendLocalNotification(
-        '✅ Tarea creada',
-        `"${newTitle.trim()}" fue agregada al hogar`
-      )
+      try {
+        await sendLocalNotification(
+          '✅ Tarea creada',
+          `"${newTitle.trim()}" fue agregada al hogar`
+        )
+      } catch (notifError) {
+        console.log('Notificación local no disponible:', notifError)
+      }
 
       // Programar recordatorio si tiene fecha límite
       if (newDueDate && data?.id) {
-        await scheduleTaskReminder(newTitle.trim(), new Date(newDueDate), data.id)
+        try {
+          await scheduleTaskReminder(newTitle.trim(), new Date(newDueDate), data.id)
+        } catch (reminderError) {
+          console.log('Recordatorio no disponible:', reminderError)
+        }
       }
 
       setShowModal(false)
@@ -125,6 +149,52 @@ export default function TasksScreen() {
 
   async function completeTask(task: Task) {
     if (task.status === 'completed' || task.status === 'verified') return
+
+    const finishTask = async () => {
+      const { error: updateError } = await supabase.from('tasks')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', task.id)
+
+      if (updateError) {
+        Alert.alert('Error', updateError.message)
+        return
+      }
+
+      if (!home) return
+
+      const { error: pointsError } = await supabase.rpc('add_points', {
+        p_user_id: userId, p_home_id: home.id,
+        p_task_id: task.id, p_points: task.points
+      })
+
+      if (pointsError) {
+        console.log('Error sumando puntos:', pointsError)
+      }
+
+      try {
+        await sendLocalNotification(
+          `🎉 +${task.points} puntos`,
+          `Completaste "${task.title}". ¡Bien hecho!`
+        )
+      } catch (notifError) {
+        console.log('Notificación local no disponible:', notifError)
+      }
+
+      // Mostrar animación de puntos
+      setFloatPoints(task.points)
+      setShowFloat(true)
+      await loadTasks(home.id)
+    }
+
+    if (Platform.OS === 'web') {
+      const confirmed = globalThis.confirm(
+        `¿Completaste esta tarea?\n\nVas a ganar ${task.points} pts por "${task.title}"`
+      )
+      if (!confirmed) return
+      await finishTask()
+      return
+    }
+
     Alert.alert(
       '¿Completaste esta tarea?',
       `Vas a ganar ${task.points} pts por "${task.title}"`,
@@ -132,26 +202,8 @@ export default function TasksScreen() {
         { text: 'Cancelar', style: 'cancel' },
         {
           text: `¡Listo! +${task.points} pts ✅`,
-          onPress: async () => {
-            await supabase.from('tasks')
-              .update({ status: 'completed', completed_at: new Date().toISOString() })
-              .eq('id', task.id)
-            if (home) {
-              await supabase.rpc('add_points', {
-                p_user_id: userId, p_home_id: home.id,
-                p_task_id: task.id, p_points: task.points
-              })
-              
-              await sendLocalNotification(
-                `🎉 +${task.points} puntos`,
-                `Completaste "${task.title}". ¡Bien hecho!`
-              )
-              
-              // Mostrar animación de puntos
-              setFloatPoints(task.points)
-              setShowFloat(true)
-              await loadTasks(home.id)
-            }
+          onPress: () => {
+            void finishTask()
           }
         }
       ]

@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, Platform
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { clearPersistedAuthSession, supabase } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 
 export default function Home() {
   const router = useRouter()
@@ -16,6 +16,11 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => { checkUserHome() }, [])
+
+  useEffect(() => {
+    if (!hasHome) return
+    router.replace('/(app)/')
+  }, [hasHome, router])
 
   async function checkUserHome() {
     const { data: { user } } = await supabase.auth.getUser()
