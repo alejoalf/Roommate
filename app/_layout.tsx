@@ -16,22 +16,25 @@ export default function RootLayout() {
       setLoading(false)
     })
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
     })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
     if (loading) return
 
     const inAuthGroup = segments[0] === '(auth)'
+    const inAppGroup = segments[0] === '(app)'
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login')
-    } else if (session && inAuthGroup) {
+    } else if (session && !inAppGroup) {
       router.replace('/(app)/home')
     }
-  }, [session, loading])
+  }, [session, loading, segments])
 
   if (loading) {
     return (
