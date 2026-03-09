@@ -7,33 +7,44 @@ export default function AppLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#111118',
-          borderTopColor: '#1a1a24',
+          backgroundColor: '#1c1712',
+          borderTopColor: 'rgba(212,165,116,0.12)',
           borderTopWidth: 1,
-          paddingTop: 8,
           paddingBottom: 8,
-          height: 60,
+          paddingTop: 8,
+          height: 64
         },
-        tabBarActiveTintColor: '#7fff6e',
-        tabBarInactiveTintColor: '#555',
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-        },
+        tabBarActiveTintColor: '#e67e50',
+        tabBarInactiveTintColor: '#5a4a40',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' }
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Tareas',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📋</Text>,
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>✅</Text>
         }}
       />
       <Tabs.Screen
-        name="home"
+        name="ranking"
         options={{
-          title: 'Hogar',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
+          title: 'Ranking',
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🏆</Text>
+        }}
+      />
+      <Tabs.Screen
+        name="rewards"
+        options={{
+          title: 'Premios',
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🎁</Text>
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Perfil',
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>👤</Text>
         }}
       />
     </Tabs>

@@ -1,37 +1,33 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, RefreshControl
+  ActivityIndicator, RefreshControl, Platform
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
 
 type Member = {
-  user_id: string
-  points: number
-  profile: {
-    full_name: string
-    username: string
-    total_points: number
-    level: number
-  }
+  user_id: string; points: number
+  profile: { full_name: string; username: string; total_points: number }
 }
 
-const LEVEL_NAMES = ['Novato', 'Aprendiz', 'Habitante', 'Pro', 'Experto', 'Leyenda']
-const LEVEL_THRESHOLDS = [0, 50, 150, 300, 500, 1000]
+const LEVELS = ['Novato', 'Aprendiz', 'Habitante', 'Pro', 'Experto', 'Leyenda']
+const LEVEL_PTS = [0, 50, 150, 300, 500, 1000]
+const LEVEL_EMO = ['🌱', '⚡', '🏠', '🔥', '💎', '👑']
+const AVATAR_COLORS = ['#8b5a3c', '#d4a574', '#e67e50', '#a0705a', '#c9996b', '#6ba3c8', '#9b7ec8']
 
-function getLevel(points: number) {
-  let level = 0
-  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (points >= LEVEL_THRESHOLDS[i]) { level = i; break }
+function getLevel(pts: number) {
+  let i = 0
+  for (let j = LEVEL_PTS.length - 1; j >= 0; j--) {
+    if (pts >= LEVEL_PTS[j]) { i = j; break }
   }
-  return { level, name: LEVEL_NAMES[level], next: LEVEL_THRESHOLDS[level + 1] || null }
+  return { idx: i, name: LEVELS[i], emoji: LEVEL_EMO[i], next: LEVEL_PTS[i + 1] || null, cur: LEVEL_PTS[i] }
 }
 
-function getMedal(index: number) {
-  if (index === 0) return '🥇'
-  if (index === 1) return '🥈'
-  if (index === 2) return '🥉'
-  return `#${index + 1}`
+function getMedal(i: number) {
+  if (i === 0) return '🥇'
+  if (i === 1) return '🥈'
+  if (i === 2) return '🥉'
+  return `#${i + 1}`
 }
 
 export default function RankingScreen() {
@@ -48,30 +44,21 @@ export default function RankingScreen() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
-
     const { data: membership } = await supabase
       .from('home_members')
       .select('home_id, homes(name)')
-      .eq('user_id', user.id)
-      .single()
-
+      .eq('user_id', user.id).single()
     if (!membership) { setLoading(false); return }
-
-    const homeData = membership.homes as any
-    setHomeName(homeData.name)
-
+    setHomeName((membership.homes as any)?.name || '')
     const { data } = await supabase
       .from('home_members')
-      .select('user_id, points, profile:profiles(full_name, username, total_points, level)')
-      .eq('home_id', membership.home_id)
+      .select('user_id, points, profile:profiles(full_name, username, total_points)')
+      .eq('home_id', (membership as any).home_id)
       .order('points', { ascending: false })
-
     const list = (data as any) || []
     setMembers(list)
-
     const mine = list.find((m: Member) => m.user_id === user.id)
-    if (mine) setMyPoints(mine.points)
-
+    if (mine) setMyPoints(mine.points || 0)
     setLoading(false)
   }
 
@@ -81,109 +68,136 @@ export default function RankingScreen() {
     setRefreshing(false)
   }, [])
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#7fff6e" size="large" />
-      </View>
-    )
-  }
+  if (loading) return (
+    <View style={s.center}><ActivityIndicator color="#e67e50" size="large" /></View>
+  )
 
-  const myLevel = getLevel(myPoints)
+  const top = members[0]
   const myRank = members.findIndex(m => m.user_id === userId)
+  const myLvl = getLevel(myPoints)
+  const progressPct = myLvl.next
+    ? Math.min(100, ((myPoints - myLvl.cur) / (myLvl.next - myLvl.cur)) * 100)
+    : 100
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
 
       {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.headerLabel}>RANKING</Text>
-        <Text style={styles.headerTitle}>{homeName}</Text>
+      <View style={s.header}>
+        <Text style={s.headerLabel}>RANKING DEL MES</Text>
+        <Text style={s.headerTitle}>{homeName}</Text>
       </View>
 
-      {/* MI ESTADO */}
-      <View style={styles.myCard}>
-        <View style={styles.myCardLeft}>
-          <Text style={styles.myRank}>{getMedal(myRank)}</Text>
-          <View>
-            <Text style={styles.myLabel}>TU POSICIÓN</Text>
-            <Text style={styles.myPoints}>{myPoints} pts</Text>
-            <Text style={styles.myLevel}>⚡ {myLevel.name}</Text>
-          </View>
-        </View>
-        {myLevel.next && (
-          <View style={styles.myCardRight}>
-            <Text style={styles.nextLabel}>PRÓXIMO NIVEL</Text>
-            <Text style={styles.nextValue}>{myLevel.next - myPoints} pts</Text>
-            <View style={styles.progressBar}>
-              <View style={[
-                styles.progressFill,
-                {
-                  width: `${Math.min(100, ((myPoints - LEVEL_THRESHOLDS[myLevel.level]) /
-                    (myLevel.next - LEVEL_THRESHOLDS[myLevel.level])) * 100)}%`
-                }
-              ]} />
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e67e50" />}
+      >
+
+        {/* ROOMMATE DEL MES — hero card */}
+        {top && (
+          <View style={s.heroCard}>
+            <View style={s.heroGrad}>
+              <View style={s.heroTop}>
+                <View style={s.heroIcon}>
+                  <Text style={{ fontSize: 22 }}>🏆</Text>
+                </View>
+                <Text style={s.heroLabel}>Roommate del Mes</Text>
+              </View>
+              <View style={s.heroBody}>
+                <View style={[s.heroAvatar, { backgroundColor: AVATAR_COLORS[0] }]}>
+                  <Text style={s.heroAvatarText}>
+                    {(top.profile?.full_name || top.profile?.username || '?')[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={s.heroName}>
+                    {top.profile?.full_name || top.profile?.username}
+                    {top.user_id === userId ? '  (vos 🎉)' : ''}
+                  </Text>
+                  <View style={s.heroPointsRow}>
+                    <Text style={s.heroPointsStar}>★</Text>
+                    <Text style={s.heroPoints}>{top.points} puntos</Text>
+                  </View>
+                  <Text style={s.heroLevel}>
+                    {getLevel(top.points).emoji} {getLevel(top.points).name}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
         )}
-      </View>
 
-      {/* LISTA RANKING */}
-      <ScrollView
-        style={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#7fff6e" />}
-      >
-        <Text style={styles.sectionLabel}>ESTE MES</Text>
-
-        {members.map((member, index) => {
-          const isMe = member.user_id === userId
-          const lvl = getLevel(member.points)
-
-          return (
-            <View key={member.user_id} style={[styles.row, isMe && styles.rowMe]}>
-
-              <Text style={styles.rowMedal}>{getMedal(index)}</Text>
-
-              <View style={styles.rowAvatar}>
-                <Text style={{ fontSize: 18 }}>
-                  {(member.profile?.full_name || member.profile?.username || '?')[0].toUpperCase()}
-                </Text>
-              </View>
-
-              <View style={styles.rowInfo}>
-                <Text style={[styles.rowName, isMe && styles.rowNameMe]}>
-                  {member.profile?.full_name || member.profile?.username || 'Sin nombre'}
-                  {isMe ? '  (vos)' : ''}
-                </Text>
-                <Text style={styles.rowLevel}>⚡ {lvl.name}</Text>
-              </View>
-
-              <View style={styles.rowRight}>
-                <Text style={[styles.rowPoints, isMe && styles.rowPointsMe]}>
-                  {member.points}
-                </Text>
-                <Text style={styles.rowPtsLabel}>pts</Text>
-              </View>
-
+        {/* MI POSICIÓN */}
+        <View style={s.myCard}>
+          <View style={s.myLeft}>
+            <Text style={s.myMedal}>{getMedal(myRank)}</Text>
+            <View>
+              <Text style={s.myLabel}>TU POSICIÓN</Text>
+              <Text style={s.myPts}>{myPoints}<Text style={s.myPtsLabel}> pts</Text></Text>
+              <Text style={s.myLevel}>{myLvl.emoji} {myLvl.name}</Text>
             </View>
-          )
-        })}
+          </View>
+          {myLvl.next && (
+            <View style={s.myRight}>
+              <Text style={s.nextLabel}>AL SIGUIENTE NIVEL</Text>
+              <Text style={s.nextVal}>{myLvl.next - myPoints} pts</Text>
+              <View style={s.progressBar}>
+                <View style={[s.progressFill, { width: `${progressPct}%` }]} />
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* LISTA */}
+        <View style={s.listSection}>
+          <Text style={s.sectionLabel}>CLASIFICACIÓN COMPLETA</Text>
+
+          {members.map((m, i) => {
+            const isMe = m.user_id === userId
+            const lvl = getLevel(m.points)
+            const avatarColor = AVATAR_COLORS[i % AVATAR_COLORS.length]
+
+            return (
+              <View key={m.user_id} style={[s.row, isMe && s.rowMe]}>
+                <Text style={s.rowMedal}>{getMedal(i)}</Text>
+
+                <View style={[s.rowAvatar, { backgroundColor: avatarColor }]}>
+                  <Text style={s.rowAvatarText}>
+                    {(m.profile?.full_name || m.profile?.username || '?')[0].toUpperCase()}
+                  </Text>
+                </View>
+
+                <View style={s.rowInfo}>
+                  <Text style={[s.rowName, isMe && s.rowNameMe]} numberOfLines={1}>
+                    {m.profile?.full_name || m.profile?.username || 'Sin nombre'}
+                    {isMe ? ' (vos)' : ''}
+                  </Text>
+                  <Text style={s.rowLevel}>{lvl.emoji} {lvl.name}</Text>
+                </View>
+
+                <View style={s.rowRight}>
+                  <Text style={[s.rowPts, isMe && s.rowPtsMe]}>{m.points}</Text>
+                  <Text style={s.rowPtsLbl}>pts</Text>
+                </View>
+              </View>
+            )
+          })}
+        </View>
 
         {/* NIVELES */}
-        <Text style={[styles.sectionLabel, { marginTop: 32 }]}>NIVELES</Text>
-        <View style={styles.levelsGrid}>
-          {LEVEL_NAMES.map((name, i) => (
-            <View key={name} style={[
-              styles.levelItem,
-              myPoints >= LEVEL_THRESHOLDS[i] && styles.levelItemUnlocked
-            ]}>
-              <Text style={styles.levelPoints}>{LEVEL_THRESHOLDS[i]}+ pts</Text>
-              <Text style={styles.levelName}>{name}</Text>
-              {myPoints >= LEVEL_THRESHOLDS[i] && (
-                <Text style={styles.levelCheck}>✓</Text>
-              )}
-            </View>
-          ))}
+        <View style={s.levelsSection}>
+          <Text style={s.sectionLabel}>SISTEMA DE NIVELES</Text>
+          <View style={s.levelsGrid}>
+            {LEVELS.map((name, i) => (
+              <View key={name} style={[s.levelChip, myPoints >= LEVEL_PTS[i] && s.levelChipUnlocked]}>
+                <Text style={s.levelChipEmo}>{LEVEL_EMO[i]}</Text>
+                <Text style={[s.levelChipName, myPoints >= LEVEL_PTS[i] && s.levelChipNameUnlocked]}>
+                  {name}
+                </Text>
+                <Text style={s.levelChipPts}>{LEVEL_PTS[i]}+ pts</Text>
+                {myPoints >= LEVEL_PTS[i] && <Text style={s.levelCheck}>✓</Text>}
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={{ height: 100 }} />
@@ -192,74 +206,108 @@ export default function RankingScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f0f14' },
-  center: { flex: 1, backgroundColor: '#0f0f14', justifyContent: 'center', alignItems: 'center' },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#110e0a' },
+  center: { flex: 1, backgroundColor: '#110e0a', justifyContent: 'center', alignItems: 'center' },
   header: {
-    paddingTop: 60, paddingBottom: 20, paddingHorizontal: 24,
-    borderBottomWidth: 1, borderBottomColor: '#1a1a24'
+    paddingTop: 60, paddingBottom: 18, paddingHorizontal: 20,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(212,165,116,0.1)'
   },
-  headerLabel: { fontSize: 10, color: '#444', letterSpacing: 0.15, marginBottom: 4 },
-  headerTitle: { fontSize: 24, fontWeight: '900', color: '#f0f0f5', letterSpacing: -0.5 },
+  headerLabel: { fontSize: 10, color: '#5a4a40', letterSpacing: 0.15, marginBottom: 3 },
+  headerTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontSize: 22, fontWeight: '700', color: '#f5ede4'
+  },
+  // HERO
+  heroCard: { margin: 20, borderRadius: 20, overflow: 'hidden' },
+  heroGrad: {
+    backgroundColor: '#8b5a3c',
+    padding: 24,
+    borderRadius: 20,
+    // gradient simulado con overlay
+    shadowColor: '#e67e50', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25, shadowRadius: 12, elevation: 8
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  heroIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center'
+  },
+  heroLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  heroBody: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  heroAvatar: {
+    width: 68, height: 68, borderRadius: 34,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)'
+  },
+  heroAvatarText: { fontSize: 26, fontWeight: '900', color: '#fff' },
+  heroName: { fontSize: 18, fontWeight: '800', color: '#fff', marginBottom: 4 },
+  heroPointsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  heroPointsStar: { fontSize: 16, color: '#ffd700' },
+  heroPoints: { fontSize: 18, color: '#fff', fontWeight: '700' },
+  heroLevel: { fontSize: 13, color: 'rgba(255,255,255,0.75)' },
+  // MY CARD
   myCard: {
-    margin: 20, padding: 20,
-    backgroundColor: '#18181f',
-    borderRadius: 12, borderWidth: 1,
-    borderColor: 'rgba(127,255,110,0.2)',
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'
+    marginHorizontal: 20, marginBottom: 24,
+    backgroundColor: '#1c1712', borderRadius: 16,
+    padding: 18, flexDirection: 'row',
+    justifyContent: 'space-between', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(230,126,80,0.2)'
   },
-  myCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  myRank: { fontSize: 36 },
-  myLabel: { fontSize: 9, color: '#444', letterSpacing: 0.12, marginBottom: 2 },
-  myPoints: { fontSize: 24, fontWeight: '900', color: '#7fff6e', letterSpacing: -0.5 },
-  myLevel: { fontSize: 12, color: '#555', marginTop: 2 },
-  myCardRight: { alignItems: 'flex-end' },
-  nextLabel: { fontSize: 9, color: '#444', letterSpacing: 0.1, marginBottom: 2 },
-  nextValue: { fontSize: 16, fontWeight: '800', color: '#f0f0f5', marginBottom: 6 },
+  myLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  myMedal: { fontSize: 32 },
+  myLabel: { fontSize: 9, color: '#5a4a40', letterSpacing: 0.12, marginBottom: 2 },
+  myPts: { fontSize: 26, fontWeight: '900', color: '#e67e50' },
+  myPtsLabel: { fontSize: 13, fontWeight: '400', color: '#8a7060' },
+  myLevel: { fontSize: 12, color: '#8a7060', marginTop: 2 },
+  myRight: { alignItems: 'flex-end' },
+  nextLabel: { fontSize: 9, color: '#5a4a40', letterSpacing: 0.1, marginBottom: 2 },
+  nextVal: { fontSize: 15, fontWeight: '800', color: '#f5ede4', marginBottom: 6 },
   progressBar: {
-    width: 80, height: 4, backgroundColor: '#2a2a35',
+    width: 80, height: 4, backgroundColor: '#2e2820',
     borderRadius: 2, overflow: 'hidden'
   },
-  progressFill: { height: '100%', backgroundColor: '#7fff6e', borderRadius: 2 },
-  list: { flex: 1, paddingHorizontal: 20 },
-  sectionLabel: {
-    fontSize: 10, color: '#444', letterSpacing: 0.15,
-    marginBottom: 12, marginTop: 4
-  },
+  progressFill: { height: '100%', backgroundColor: '#e67e50', borderRadius: 2 },
+  // LIST
+  listSection: { paddingHorizontal: 20 },
+  sectionLabel: { fontSize: 10, color: '#5a4a40', letterSpacing: 0.15, marginBottom: 12 },
   row: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#18181f', borderRadius: 10,
+    backgroundColor: '#1c1712', borderRadius: 12,
     padding: 14, marginBottom: 8,
-    borderWidth: 1, borderColor: '#2a2a35', gap: 12
+    borderWidth: 1, borderColor: 'rgba(212,165,116,0.1)', gap: 12
   },
-  rowMe: { borderColor: 'rgba(127,255,110,0.3)', backgroundColor: '#1a1f1a' },
-  rowMedal: { fontSize: 20, width: 30, textAlign: 'center' },
+  rowMe: { borderColor: 'rgba(230,126,80,0.3)', backgroundColor: '#201812' },
+  rowMedal: { fontSize: 18, width: 28, textAlign: 'center' },
   rowAvatar: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#2a2a35',
     justifyContent: 'center', alignItems: 'center'
   },
+  rowAvatarText: { fontSize: 16, fontWeight: '900', color: '#fff' },
   rowInfo: { flex: 1 },
-  rowName: { fontSize: 14, fontWeight: '700', color: '#f0f0f5' },
-  rowNameMe: { color: '#7fff6e' },
-  rowLevel: { fontSize: 11, color: '#555', marginTop: 2 },
+  rowName: { fontSize: 14, fontWeight: '700', color: '#f5ede4', marginBottom: 2 },
+  rowNameMe: { color: '#e67e50' },
+  rowLevel: { fontSize: 11, color: '#5a4a40' },
   rowRight: { alignItems: 'flex-end' },
-  rowPoints: { fontSize: 18, fontWeight: '900', color: '#f0f0f5' },
-  rowPointsMe: { color: '#7fff6e' },
-  rowPtsLabel: { fontSize: 9, color: '#444', letterSpacing: 0.1 },
-  levelsGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8
+  rowPts: { fontSize: 18, fontWeight: '900', color: '#f5ede4' },
+  rowPtsMe: { color: '#e67e50' },
+  rowPtsLbl: { fontSize: 9, color: '#5a4a40', letterSpacing: 0.1 },
+  // LEVELS
+  levelsSection: { paddingHorizontal: 20, marginTop: 28 },
+  levelsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  levelChip: {
+    width: '30.5%', backgroundColor: '#1c1712', borderRadius: 12,
+    padding: 12, borderWidth: 1, borderColor: 'rgba(212,165,116,0.12)',
+    position: 'relative', alignItems: 'center'
   },
-  levelItem: {
-    width: '31%', padding: 12, borderRadius: 8,
-    backgroundColor: '#18181f', borderWidth: 1,
-    borderColor: '#2a2a35', position: 'relative'
-  },
-  levelItemUnlocked: { borderColor: 'rgba(127,255,110,0.3)' },
-  levelPoints: { fontSize: 10, color: '#444', marginBottom: 4 },
-  levelName: { fontSize: 13, fontWeight: '700', color: '#f0f0f5' },
+  levelChipUnlocked: { borderColor: 'rgba(230,126,80,0.3)', backgroundColor: '#201812' },
+  levelChipEmo: { fontSize: 22, marginBottom: 4 },
+  levelChipName: { fontSize: 12, fontWeight: '700', color: '#5a4a40' },
+  levelChipNameUnlocked: { color: '#f5ede4' },
+  levelChipPts: { fontSize: 10, color: '#5a4a40', marginTop: 2 },
   levelCheck: {
-    position: 'absolute', top: 8, right: 10,
-    fontSize: 12, color: '#7fff6e', fontWeight: '900'
+    position: 'absolute', top: 8, right: 8,
+    fontSize: 10, color: '#e67e50', fontWeight: '900'
   }
 })
