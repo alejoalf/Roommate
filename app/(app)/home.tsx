@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator, Platform
+  StyleSheet, Alert, ActivityIndicator, Platform, Image
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
@@ -77,7 +77,7 @@ export default function Home() {
 
   if (hasHome) return (
     <View style={s.center}>
-      <Text style={{ fontSize: 52, marginBottom: 16 }}>🏠</Text>
+      <Image source={require('../../assets/logo.png')} style={s.centerLogo} resizeMode="contain" />
       <Text style={s.title}>¡Estás en tu hogar!</Text>
       <Text style={s.sub}>Cargando dashboard...</Text>
     </View>
@@ -86,7 +86,7 @@ export default function Home() {
   if (mode === 'menu') return (
     <View style={s.container}>
       <View style={s.logoWrap}>
-        <Text style={{ fontSize: 52, marginBottom: 12 }}>🏠</Text>
+        <Image source={require('../../assets/logo.png')} style={s.heroLogo} resizeMode="contain" />
         <Text style={s.title}>Configurá tu Hogar</Text>
         <Text style={s.sub}>Creá uno nuevo o unite a uno existente</Text>
       </View>
@@ -204,6 +204,8 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#110e0a', justifyContent: 'center', paddingHorizontal: 24 },
   center: { flex: 1, backgroundColor: '#110e0a', justifyContent: 'center', alignItems: 'center' },
   logoWrap: { alignItems: 'center', marginBottom: 36 },
+  heroLogo: { width: 128, height: 74, marginBottom: 8 },
+  centerLogo: { width: 120, height: 68, marginBottom: 12 },
   title: {
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
     fontSize: 28, fontWeight: '700', color: '#f5ede4',

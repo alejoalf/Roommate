@@ -151,25 +151,75 @@ export default function TasksScreen() {
     if (task.status === 'completed' || task.status === 'verified') return
 
     const finishTask = async () => {
-      const { error: updateError } = await supabase.from('tasks')
+      const { data: authData } = await supabase.auth.getUser()
+      const completerId = authData.user?.id || userId
+
+      if (!home || !completerId) {
+        Alert.alert('Error', 'No se pudo identificar al usuario que completó la tarea')
+        return
+      }
+
+      const { data: updatedTaskRows, error: updateError } = await supabase.from('tasks')
         .update({ status: 'completed', completed_at: new Date().toISOString() })
         .eq('id', task.id)
+        .in('status', ['pending', 'overdue'])
+        .select('id')
 
       if (updateError) {
         Alert.alert('Error', updateError.message)
         return
       }
 
-      if (!home) return
-
-      const { error: pointsError } = await supabase.rpc('add_points', {
-        p_user_id: userId, p_home_id: home.id,
-        p_task_id: task.id, p_points: task.points
-      })
-
-      if (pointsError) {
-        console.log('Error sumando puntos:', pointsError)
+      if (!updatedTaskRows || updatedTaskRows.length === 0) {
+        await loadTasks(home.id)
+        return
       }
+
+      const { data: member, error: memberError } = await supabase
+        .from('home_members')
+        .select('points')
+        .eq('user_id', completerId)
+        .eq('home_id', home.id)
+        .maybeSingle()
+
+      if (memberError || !member) {
+        Alert.alert('Error', 'La tarea se marcó como hecha, pero no se pudieron sumar puntos')
+        return
+      }
+
+      const currentPoints = Number(member.points || 0)
+      const earnedPoints = Number(task.points || 0)
+      const nextPoints = currentPoints + earnedPoints
+
+      const { error: updatePointsError } = await supabase
+        .from('home_members')
+        .update({ points: nextPoints })
+        .eq('user_id', completerId)
+        .eq('home_id', home.id)
+
+      if (updatePointsError) {
+        Alert.alert('Error', 'La tarea se marcó como hecha, pero no se pudieron sumar puntos')
+        return
+      }
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('total_points')
+        .eq('id', completerId)
+        .maybeSingle()
+
+      const totalPoints = Number(profileData?.total_points || 0)
+      await supabase
+        .from('profiles')
+        .update({ total_points: totalPoints + earnedPoints })
+        .eq('id', completerId)
+
+      await supabase.from('points_log').insert({
+        user_id: completerId,
+        home_id: home.id,
+        points: earnedPoints,
+        reason: `Tarea completada: ${task.title}`
+      })
 
       try {
         await sendLocalNotification(

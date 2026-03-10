@@ -6,21 +6,23 @@
     "orientation": "portrait",
     "newArchEnabled": false,
     "scheme": "roommate-app",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.png",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#110e0a"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/android-icon-foreground.png",
+        "foregroundImage": "./assets/logo.png",
+        "monochromeImage": "./assets/logo.png",
         "backgroundImage": "./assets/android-icon-background.png"
       },
       "package": "com.roommate.app"
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/logo.png"
     },
     "extra": {
       "eas": {

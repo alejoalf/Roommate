@@ -1,18 +1,21 @@
-import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { supabase } from './supabase'
 
 const isWeb = Platform.OS === 'web'
-const canScheduleNotifications =
-  typeof Notifications.scheduleNotificationAsync === 'function'
-const canCancelNotifications =
-  typeof Notifications.cancelAllScheduledNotificationsAsync === 'function'
+
+function getNotificationsModule() {
+  if (isWeb) return null
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return require('expo-notifications') as typeof import('expo-notifications')
+}
 
 // Cómo se muestran las notificaciones cuando la app está abierta
 if (!isWeb) {
-  Notifications.setNotificationHandler({
+  const Notifications = getNotificationsModule()
+  if (Notifications) {
+    Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldPlaySound: true,
@@ -20,12 +23,18 @@ if (!isWeb) {
       shouldShowBanner: true,
       shouldShowList: true,
     }),
-  })
+    })
+  }
 }
 
 // Pedir permisos y obtener el token del dispositivo
 export async function registerForPushNotifications(): Promise<string | null> {
   if (isWeb) {
+    return null
+  }
+
+  const Notifications = getNotificationsModule()
+  if (!Notifications) {
     return null
   }
 
@@ -78,7 +87,10 @@ export async function savePushToken(token: string) {
 
 // Notificación local inmediata
 export async function sendLocalNotification(title: string, body: string) {
-  if (isWeb || !canScheduleNotifications) return
+  if (isWeb) return
+
+  const Notifications = getNotificationsModule()
+  if (!Notifications || typeof Notifications.scheduleNotificationAsync !== 'function') return
 
   try {
     await Notifications.scheduleNotificationAsync({
@@ -96,7 +108,10 @@ export async function scheduleTaskReminder(
   dueDate: Date,
   taskId: string
 ) {
-  if (isWeb || !canScheduleNotifications) return
+  if (isWeb) return
+
+  const Notifications = getNotificationsModule()
+  if (!Notifications || typeof Notifications.scheduleNotificationAsync !== 'function') return
 
   const reminderDate = new Date(dueDate.getTime() - 2 * 60 * 60 * 1000)
   if (reminderDate < new Date()) return
@@ -121,7 +136,10 @@ export async function scheduleTaskReminder(
 
 // Cancelar todos los recordatorios
 export async function cancelAllReminders() {
-  if (isWeb || !canCancelNotifications) return
+  if (isWeb) return
+
+  const Notifications = getNotificationsModule()
+  if (!Notifications || typeof Notifications.cancelAllScheduledNotificationsAsync !== 'function') return
 
   try {
     await Notifications.cancelAllScheduledNotificationsAsync()

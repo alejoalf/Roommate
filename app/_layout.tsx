@@ -2,9 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { clearPersistedAuthSession, supabase } from '../lib/supabase'
 import { Session } from '@supabase/supabase-js'
-import { View, ActivityIndicator } from 'react-native'
+import { View, ActivityIndicator, Platform } from 'react-native'
 import { registerForPushNotifications, savePushToken } from '../lib/notifications'
-import * as Notifications from 'expo-notifications'
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null)
@@ -71,6 +70,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!session) return
+    if (Platform.OS === 'web') return
 
     registerForPushNotifications()
       .then(token => {
@@ -79,22 +79,6 @@ export default function RootLayout() {
       .catch(error => {
         console.log('Error registrando notificaciones:', error)
       })
-
-    const sub = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notificación recibida:', notification)
-    })
-
-    const subResponse = Notifications.addNotificationResponseReceivedListener(response => {
-      const taskId = response.notification.request.content.data?.taskId
-      if (taskId) {
-        console.log('Tap en notificación, taskId:', taskId)
-      }
-    })
-
-    return () => {
-      sub.remove()
-      subResponse.remove()
-    }
   }, [session])
 
   useEffect(() => {

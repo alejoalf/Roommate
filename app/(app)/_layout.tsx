@@ -1,5 +1,5 @@
 import { Tabs, Slot } from 'expo-router'
-import { Animated, Text, View, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native'
+import { Animated, Text, View, StyleSheet, TouchableOpacity, useWindowDimensions, Image } from 'react-native'
 import { useRouter, usePathname } from 'expo-router'
 import { useRef, useEffect } from 'react'
 
@@ -36,7 +36,9 @@ function DesktopSidebar() {
   return (
     <View style={styles.desktopContainer}>
       <View style={styles.sidebar}>
-        <Text style={styles.logo}>🏠 RoomMate</Text>
+        <View style={styles.logoWrap}>
+          <Image source={require('../../assets/logo.png')} style={styles.logoImage} resizeMode="contain" />
+        </View>
         
         {tabs.map(tab => {
           const isActive = pathname === tab.path || 
@@ -67,7 +69,20 @@ function MobileTabs() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: '#1c1712',
+          shadowColor: 'transparent',
+          elevation: 0,
+        },
+        headerTitle: () => (
+          <Image 
+            source={require('../../assets/logo.png')} 
+            style={styles.mobileHeaderLogo} 
+            resizeMode="contain" 
+          />
+        ),
+        headerTitleAlign: 'center',
         tabBarStyle: {
           backgroundColor: '#1c1712',
           borderTopColor: 'rgba(212,165,116,0.12)',
@@ -138,12 +153,18 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     paddingHorizontal: 16,
   },
-  logo: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#f0f0f5',
+  logoWrap: {
+    alignItems: 'flex-start',
     marginBottom: 40,
     paddingHorizontal: 12,
+  },
+  logoImage: {
+    width: 120,
+    height: 44,
+  },
+  mobileHeaderLogo: {
+    width: 100,
+    height: 36,
   },
   sidebarItem: {
     flexDirection: 'row',

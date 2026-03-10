@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView
+  StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Image
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
@@ -54,7 +54,7 @@ export default function Register() {
     >
       <ScrollView contentContainerStyle={styles.inner}>
 
-        <Text style={styles.logo}>👋</Text>
+        <Image source={require('../../assets/logo.png')} style={styles.logoImage} resizeMode="contain" />
         <Text style={styles.title}>Crear cuenta</Text>
         <Text style={styles.subtitle}>Unite a tu hogar</Text>
 
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     flexGrow: 1, justifyContent: 'center',
     paddingHorizontal: 32, paddingVertical: 60
   },
-  logo: { fontSize: 52, textAlign: 'center', marginBottom: 12 },
+  logoImage: { width: 120, height: 70, alignSelf: 'center', marginBottom: 8 },
   title: {
     fontSize: 32, fontWeight: '900', color: '#f0f0f5',
     textAlign: 'center', letterSpacing: -1, marginBottom: 6

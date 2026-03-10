@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, KeyboardAvoidingView, Platform, ScrollView, Linking
+  Alert, KeyboardAvoidingView, Platform, ScrollView, Linking, Image
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { clearPersistedAuthSession, supabase } from '../../lib/supabase'
@@ -129,9 +129,7 @@ export default function Login() {
 
         {/* LOGO */}
         <View style={s.logoWrap}>
-          <View style={s.logoCircle}>
-            <Text style={s.logoEmoji}>🏠</Text>
-          </View>
+          <Image source={require('../../assets/logo.png')} style={s.logoImage} resizeMode="contain" />
           <Text style={s.appName}>RoomMate</Text>
           <Text style={s.appSub}>Organizá tu hogar con tus compañeros</Text>
         </View>
@@ -285,13 +283,7 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#110e0a' },
   inner: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingBottom: 48 },
   logoWrap: { alignItems: 'center', marginBottom: 32 },
-  logoCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: 'rgba(230,126,80,0.12)',
-    borderWidth: 1, borderColor: 'rgba(230,126,80,0.25)',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 14
-  },
-  logoEmoji: { fontSize: 32 },
+  logoImage: { width: 120, height: 70, marginBottom: 8 },
   appName: {
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
     fontSize: 34, fontWeight: '700',
