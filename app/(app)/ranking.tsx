@@ -53,13 +53,15 @@ export default function RankingScreen() {
     setHomeName((membership.homes as any)?.name || '')
     const { data } = await supabase
       .from('home_members')
-      .select('user_id, points, profile:profiles(full_name, username, total_points)')
+      .select('user_id, profile:profiles(full_name, username, total_points)')
       .eq('home_id', (membership as any).home_id)
-      .order('points', { ascending: false })
-    const list = (data as any) || []
+      .order('user_id', { ascending: false })
+    const list = ((data as any) || []).sort((a: Member, b: Member) => 
+      (b.profile?.total_points || 0) - (a.profile?.total_points || 0)
+    )
     setMembers(list)
     const mine = list.find((m: Member) => m.user_id === user.id)
-    if (mine) setMyPoints(mine.points || 0)
+    if (mine) setMyPoints(mine.profile?.total_points || 0)
     setLoading(false)
   }
 
@@ -115,10 +117,10 @@ export default function RankingScreen() {
                     </Text>
                     <View style={s.heroPointsRow}>
                       <Text style={s.heroPointsStar}>★</Text>
-                      <Text style={s.heroPoints}>{top.points} puntos</Text>
+                      <Text style={s.heroPoints}>{top.profile?.total_points || 0} puntos</Text>
                     </View>
                     <Text style={s.heroLevel}>
-                      {getLevel(top.points).emoji} {getLevel(top.points).name}
+                      {getLevel(top.profile?.total_points || 0).emoji} {getLevel(top.profile?.total_points || 0).name}
                     </Text>
                   </View>
                 </View>
@@ -176,7 +178,7 @@ export default function RankingScreen() {
                   </View>
 
                   <View style={s.rowRight}>
-                    <Text style={[s.rowPts, isMe && s.rowPtsMe]}>{m.points}</Text>
+                    <Text style={[s.rowPts, isMe && s.rowPtsMe]}>{m.profile?.total_points || 0}</Text>
                     <Text style={s.rowPtsLbl}>pts</Text>
                   </View>
                 </View>

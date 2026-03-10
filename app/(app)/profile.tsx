@@ -129,7 +129,7 @@ export default function ProfileScreen() {
   const badges = getBadges(profile?.total_points || 0, tasksDone, rewardsClaimed)
   const unlockedCount = badges.filter(b => b.unlocked).length
   const progressPct = lvl.next
-    ? Math.min(100, ((homePoints - lvl.cur) / (lvl.next - lvl.cur)) * 100) : 100
+    ? Math.min(100, (((profile?.total_points || 0) - lvl.cur) / (lvl.next - lvl.cur)) * 100) : 100
   const medalEmoji = myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : `#${myRank}`
 
   return (
@@ -165,7 +165,7 @@ export default function ProfileScreen() {
           {/* STATS ROW */}
           <View style={s.statsRow}>
             <View style={s.statItem}>
-              <Text style={s.statVal}>{homePoints}</Text>
+              <Text style={s.statVal}>{profile?.total_points || 0}</Text>
               <Text style={s.statLbl}>Puntos</Text>
             </View>
             <View style={s.statDivider} />
@@ -186,7 +186,7 @@ export default function ProfileScreen() {
           <View style={s.levelTop}>
             <Text style={s.levelCurrent}>{lvl.emoji} {lvl.name}</Text>
             {lvl.next && (
-              <Text style={s.levelNext}>{lvl.next - homePoints} pts para {LEVEL_EMO[lvl.idx + 1]} {LEVELS[lvl.idx + 1]}</Text>
+              <Text style={s.levelNext}>{lvl.next - (profile?.total_points || 0)} pts para {LEVEL_EMO[lvl.idx + 1]} {LEVELS[lvl.idx + 1]}</Text>
             )}
           </View>
           <View style={s.progressBar}>

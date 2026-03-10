@@ -37,7 +37,24 @@ export default function RewardsScreen() {
       .from('home_members').select('home_id, points').eq('user_id', user.id).maybeSingle()
     if (!mem) { setLoading(false); return }
     setHomeId(mem.home_id)
-    setMyPoints(mem.points || 0)
+
+    // Cargar total acumulado del perfil
+    const { data: profile } = await supabase
+      .from('profiles').select('total_points').eq('id', user.id).maybeSingle()
+    const totalEarned = profile?.total_points || 0
+    const currentSpendable = mem.points || 0
+
+    // Si home_members.points es menor que lo acumulado, sincronizar
+    // (pasa cuando las tareas viejas no actualizaron home_members.points)
+    if (totalEarned > currentSpendable) {
+      await supabase.from('home_members')
+        .update({ points: totalEarned })
+        .eq('user_id', user.id).eq('home_id', mem.home_id)
+      setMyPoints(totalEarned)
+    } else {
+      setMyPoints(currentSpendable)
+    }
+
     await loadRewards(mem.home_id)
     // Historial de canjes
     const { data: claimsData } = await supabase

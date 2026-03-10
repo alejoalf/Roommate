@@ -44,6 +44,7 @@ export default function TasksScreen() {
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState<'all' | 'mine' | 'pending' | 'done'>('all')
   const [showPrendas, setShowPrendas] = useState(false)
+  const [myTotalPoints, setMyTotalPoints] = useState(0)
   // Estados para animación de puntos
   const [floatPoints, setFloatPoints] = useState(0)
   const [showFloat, setShowFloat] = useState(false)
@@ -73,6 +74,15 @@ export default function TasksScreen() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
+    
+    // Cargar perfil del usuario
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('total_points')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (profile) setMyTotalPoints(profile.total_points || 0)
+    
     const membership = await getMembershipWithRetry(user.id)
     if (!membership) { setLoading(false); return }
     const homeData = membership.homes as any
@@ -191,14 +201,16 @@ export default function TasksScreen() {
       const earnedPoints = Number(task.points || 0)
       const nextPoints = currentPoints + earnedPoints
 
-      const { error: updatePointsError } = await supabase
+      const { error: updatePointsError, data: updateResult } = await supabase
         .from('home_members')
         .update({ points: nextPoints })
         .eq('user_id', completerId)
         .eq('home_id', home.id)
-
+        .select('points')
+      
       if (updatePointsError) {
         Alert.alert('Error', 'La tarea se marcó como hecha, pero no se pudieron sumar puntos')
+        console.error('Error al actualizar home_members points:', updatePointsError)
         return
       }
 
@@ -209,10 +221,15 @@ export default function TasksScreen() {
         .maybeSingle()
 
       const totalPoints = Number(profileData?.total_points || 0)
-      await supabase
+      const { error: updateProfileError } = await supabase
         .from('profiles')
         .update({ total_points: totalPoints + earnedPoints })
         .eq('id', completerId)
+        .select('total_points')
+
+      if (updateProfileError) {
+        console.warn('Error actualizando total_points en perfil:', updateProfileError)
+      }
 
       await supabase.from('points_log').insert({
         user_id: completerId,
@@ -233,6 +250,7 @@ export default function TasksScreen() {
       // Mostrar animación de puntos
       setFloatPoints(task.points)
       setShowFloat(true)
+      setMyTotalPoints(totalPoints + earnedPoints)
       await loadTasks(home.id)
     }
 
@@ -295,11 +313,17 @@ export default function TasksScreen() {
           <Text style={s.headerTitle}>{home.name}</Text>
           <Text style={s.headerSub}>{pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}</Text>
         </View>
-        <TouchableOpacity style={s.codeBox} onPress={() => Alert.alert('Código de invitación', `Compartí este código con tus roommates:\n\n${home.invite_code}`)}>
-          <Text style={s.codeLabel}>CÓDIGO</Text>
-          <Text style={s.codeValue}>{home.invite_code}</Text>
-          <Text style={s.codeTap}>toca para ver</Text>
-        </TouchableOpacity>
+        <View style={{ gap: 12 }}>
+          <View style={s.codeBox}>
+            <Text style={s.codeLabel}>PUNTOS</Text>
+            <Text style={s.codeValue}>⭐ {myTotalPoints}</Text>
+          </View>
+          <TouchableOpacity style={s.codeBox} onPress={() => Alert.alert('Código de invitación', `Compartí este código con tus roommates:\n\n${home.invite_code}`)}>
+            <Text style={s.codeLabel}>CÓDIGO</Text>
+            <Text style={s.codeValue}>{home.invite_code}</Text>
+            <Text style={s.codeTap}>toca para ver</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* PRENDAS BANNER */}
