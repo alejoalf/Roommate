@@ -3,6 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, Alert, RefreshControl, Platform, ActivityIndicator
 } from 'react-native'
+import { useFocusEffect } from 'expo-router'
+import { useIsFocused } from '@react-navigation/native'
 import { supabase } from '../../lib/supabase'
 import { SkeletonScreen, FadeInView, ScaleInView } from '../../components/Animated'
 
@@ -13,6 +15,7 @@ type Reward = {
 }
 
 export default function RewardsScreen() {
+  const isFocused = useIsFocused()
   const [rewards, setRewards] = useState<Reward[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -28,52 +31,119 @@ export default function RewardsScreen() {
   const [claims, setClaims] = useState<any[]>([])
 
   useEffect(() => { loadData() }, [])
+  useFocusEffect(
+    useCallback(() => {
+      void loadData()
+    }, [])
+  )
+
+  const refreshPointsOnly = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('total_points')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (profile) {
+      setMyPoints(Number(profile.total_points || 0))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isFocused) return
+
+    void refreshPointsOnly()
+    const intervalId = setInterval(() => {
+      void refreshPointsOnly()
+    }, 2000)
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [isFocused, refreshPointsOnly])
+
+  useEffect(() => {
+    if (!userId) return
+
+    const channel = supabase
+      .channel(`rewards-live-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+        (payload: any) => {
+          const next = Number(payload.new?.total_points || 0)
+          setMyPoints(next)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'reward_claims', filter: `user_id=eq.${userId}` },
+        () => {
+          void loadData()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [userId])
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('total_points')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    setMyPoints(Number(profile?.total_points || 0))
+
     const { data: mem } = await supabase
       .from('home_members').select('home_id, points').eq('user_id', user.id).maybeSingle()
     if (!mem) { setLoading(false); return }
     setHomeId(mem.home_id)
 
-    // Cargar total acumulado del perfil
-    const { data: profile } = await supabase
-      .from('profiles').select('total_points').eq('id', user.id).maybeSingle()
-    const totalEarned = profile?.total_points || 0
-    const currentSpendable = mem.points || 0
-
-    // Si home_members.points es menor que lo acumulado, sincronizar
-    // (pasa cuando las tareas viejas no actualizaron home_members.points)
-    if (totalEarned > currentSpendable) {
-      await supabase.from('home_members')
-        .update({ points: totalEarned })
-        .eq('user_id', user.id).eq('home_id', mem.home_id)
-      setMyPoints(totalEarned)
-    } else {
-      setMyPoints(currentSpendable)
+    // Mantener home_members.points sincronizado con el saldo principal
+    if (Number(mem.points || 0) !== Number(profile?.total_points || 0)) {
+      await supabase
+        .from('home_members')
+        .update({ points: Number(profile?.total_points || 0) })
+        .eq('user_id', user.id)
+        .eq('home_id', mem.home_id)
     }
-
-    await loadRewards(mem.home_id)
     // Historial de canjes
     const { data: claimsData } = await supabase
       .from('reward_claims')
-      .select('id, claimed_at, rewards(title)')
+      .select('id, reward_id, claimed_at, rewards(title)')
       .eq('user_id', user.id)
       .order('claimed_at', { ascending: false })
       .limit(5)
-    setClaims((claimsData as any) || [])
+
+    const typedClaims = (claimsData as any[]) || []
+    setClaims(typedClaims)
+
+    const claimedRewardIds = new Set(typedClaims.map(c => c.reward_id))
+    await loadRewards(mem.home_id, claimedRewardIds)
     setLoading(false)
   }
 
-  async function loadRewards(hId: string) {
+  async function loadRewards(hId: string, claimedRewardIds?: Set<string>) {
     const { data } = await supabase
       .from('rewards')
       .select('id, title, description, points_cost, created_by, is_active, creator:profiles!rewards_created_by_fkey(full_name, username)')
       .eq('home_id', hId).eq('is_active', true)
       .order('points_cost', { ascending: true })
-    setRewards((data as any) || [])
+    const list = (data as any[]) || []
+    if (claimedRewardIds && claimedRewardIds.size > 0) {
+      setRewards(list.filter(r => !claimedRewardIds.has(r.id)))
+      return
+    }
+    setRewards(list)
   }
 
   const onRefresh = useCallback(async () => {
@@ -97,25 +167,100 @@ export default function RewardsScreen() {
       Alert.alert('Puntos insuficientes', `Necesitás ${r.points_cost} pts pero tenés ${myPoints}. ¡Completá más tareas!`)
       return
     }
+
+    const doClaim = async () => {
+      setClaimingId(r.id)
+
+      const { data: latestProfile, error: latestProfileError } = await supabase
+        .from('profiles')
+        .select('total_points')
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (latestProfileError || !latestProfile) {
+        Alert.alert('Error', 'No se pudo validar tu saldo actual')
+        setClaimingId(null)
+        return
+      }
+
+      const latestPoints = Number(latestProfile.total_points || 0)
+      if (latestPoints < r.points_cost) {
+        Alert.alert('Puntos insuficientes', `Necesitás ${r.points_cost} pts pero tenés ${latestPoints}.`)
+        setMyPoints(latestPoints)
+        setClaimingId(null)
+        return
+      }
+
+      const nextPoints = latestPoints - r.points_cost
+
+      const { data: updatedProfile, error: updatePointsError } = await supabase
+        .from('profiles')
+        .update({ total_points: nextPoints })
+        .eq('id', userId)
+        .select('total_points')
+        .maybeSingle()
+
+      if (updatePointsError || !updatedProfile) {
+        Alert.alert('Error', updatePointsError?.message || 'No se pudo descontar el premio')
+        setClaimingId(null)
+        return
+      }
+
+      // Sincronizar tabla home_members para vistas que dependan de este campo
+      const { error: syncMemberError } = await supabase
+        .from('home_members')
+        .update({ points: nextPoints })
+        .eq('user_id', userId)
+        .eq('home_id', homeId)
+
+      if (syncMemberError) {
+        console.warn('No se pudo sincronizar home_members.points:', syncMemberError)
+      }
+
+      const { error: claimInsertError } = await supabase
+        .from('reward_claims')
+        .insert({ reward_id: r.id, user_id: userId, home_id: homeId })
+
+      if (claimInsertError) {
+        Alert.alert('Error', claimInsertError.message)
+        setClaimingId(null)
+        return
+      }
+
+      const { error: logError } = await supabase
+        .from('points_log')
+        .insert({
+          user_id: userId,
+          home_id: homeId,
+          points: -r.points_cost,
+          reason: `Premio canjeado: ${r.title}`
+        })
+
+      if (logError) {
+        console.warn('No se pudo guardar el log de puntos:', logError)
+      }
+
+      setMyPoints(Number(updatedProfile.total_points || 0))
+      setRewards(prev => prev.filter(item => item.id !== r.id))
+      setClaimingId(null)
+      Alert.alert('🎉 ¡Premio canjeado!', `Disfrutá tu "${r.title}"`)
+      await loadData()
+    }
+
+    if (Platform.OS === 'web') {
+      const confirmed = globalThis.confirm(
+        `¿Canjear "${r.title}"?\n\nVas a gastar ${r.points_cost} pts. Te quedarán ${myPoints - r.points_cost}.`
+      )
+      if (!confirmed) return
+      await doClaim()
+      return
+    }
+
     Alert.alert(`¿Canjear "${r.title}"?`, `Vas a gastar ${r.points_cost} pts. Te quedarán ${myPoints - r.points_cost}.`, [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: '🎁 Canjear', onPress: async () => {
-          setClaimingId(r.id)
-          const { error } = await supabase.from('home_members')
-            .update({ points: myPoints - r.points_cost })
-            .eq('user_id', userId).eq('home_id', homeId)
-          if (error) { Alert.alert('Error', error.message); setClaimingId(null); return }
-          await supabase.from('reward_claims').insert({ reward_id: r.id, user_id: userId, home_id: homeId })
-          await supabase.from('points_log').insert({
-            user_id: userId, home_id: homeId, points: -r.points_cost,
-            reason: `Premio canjeado: ${r.title}`
-          })
-          setMyPoints(p => p - r.points_cost)
-          setClaimingId(null)
-          Alert.alert('🎉 ¡Premio canjeado!', `Disfrutá tu "${r.title}"`)
-          await loadData()
-        }
+        text: '🎁 Canjear',
+        onPress: () => { void doClaim() }
       }
     ])
   }
