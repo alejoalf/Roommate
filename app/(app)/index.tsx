@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, Alert, RefreshControl, Platform
 } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { sendLocalNotification, scheduleTaskReminder } from '../../lib/notifications'
 import { FadeInView, FloatingPoints, SkeletonScreen } from '../../components/Animated'
@@ -50,6 +51,11 @@ export default function TasksScreen() {
   const [showFloat, setShowFloat] = useState(false)
 
   useEffect(() => { loadData() }, [])
+  useFocusEffect(
+    useCallback(() => {
+      void loadData()
+    }, [])
+  )
 
   async function getMembershipWithRetry(userId: string) {
     const attempts = 4
@@ -72,7 +78,13 @@ export default function TasksScreen() {
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setHome(null)
+      setTasks([])
+      setMembers([])
+      setLoading(false)
+      return
+    }
     setUserId(user.id)
     
     // Cargar perfil del usuario
@@ -84,7 +96,13 @@ export default function TasksScreen() {
     if (profile) setMyTotalPoints(profile.total_points || 0)
     
     const membership = await getMembershipWithRetry(user.id)
-    if (!membership) { setLoading(false); return }
+    if (!membership) {
+      setHome(null)
+      setTasks([])
+      setMembers([])
+      setLoading(false)
+      return
+    }
     const homeData = membership.homes as any
     setHome(homeData)
     const { data: memberData } = await supabase
